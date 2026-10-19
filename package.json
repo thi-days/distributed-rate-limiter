@@ -1,0 +1,16 @@
+{
+  "name": "distributed-rate-limiter",
+  "version": "1.0.0",
+  "description": "A system design case study exploring distributed rate limiting.",
+  "license": "ISC",
+  "author": "Thiago Dias",
+  "type": "commonjs",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
