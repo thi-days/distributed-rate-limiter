@@ -75,7 +75,7 @@ npm run typecheck
 npm test
 ```
 
-Source lives in `src/`, with unit tests in `tests/unit/` and real Redis checks in `tests/integration/`. The root `tsconfig.json` covers source, tests, and ESLint configuration for both editors and `npm run typecheck`, with explicit Node.js types. `tsconfig.build.json` emits source into `dist/`; tests compile into `.test-dist/`. Unit tests require no infrastructure and check that the built entry point runs in Node.js.
+Source lives in `src/`, with unit tests in `tests/unit/` and real Redis checks in `tests/integration/`. The root `tsconfig.json` covers source, tests, and ESLint configuration for both editors and `npm run typecheck`, with explicit Node.js types. `tsconfig.build.json` emits source into `dist/`; tests compile into `.test-dist/`. Unit tests require no infrastructure and cover startup configuration and the built entry point.
 
 Integration tests require Docker Compose or an existing Redis server:
 
@@ -86,6 +86,10 @@ docker compose down
 ```
 
 The integration suite sends `PING` to real Redis and fails with setup instructions if it cannot connect. It defaults to `redis://127.0.0.1:6379`; export `REDIS_URL` to use another address. `.env.example` documents this variable; tests do not load `.env` automatically. Explicit suite paths make missing test files fail instead of reporting empty integration coverage.
+
+Load policies at startup with `RATE_LIMIT_CONFIG_PATH=config/demo.json node dist/index.js`. The demonstration registers `demo-client` with defaults of 100 tokens and 100 tokens/minute, plus `demo-client-custom` with overrides. The JSON requires `defaults` (`capacity`, `refillPerMinute`) and a nonempty `clients` list; each client has a distinct, case-sensitive, whitespace-free `apiKey` and optional independent overrides. Policy values must be positive safe integers; request cost is always 1. Unknown fields are rejected.
+
+`REDIS_TIMEOUT_MS` defaults to 20 and `REDIS_PROBE_INTERVAL_MS` to 1000; overrides must be positive safe integers in milliseconds. Export these variables explicitly; `.env` is not loaded automatically. Invalid configuration exits with a redacted error. Policies remain fixed for the process lifetime; experiments with different policies must use isolated bucket state. The shared registry exposes the same frozen policy for both store implementations and returns no policy for unknown keys.
 
 ### Development dependencies
 

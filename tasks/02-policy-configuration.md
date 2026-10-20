@@ -1,6 +1,6 @@
 # 02 — Load and validate per-key policies
 
-**Status**: Not implemented
+**Status**: Implemented
 
 ## Description
 

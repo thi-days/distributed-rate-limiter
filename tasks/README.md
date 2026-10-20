@@ -1,6 +1,6 @@
 # Implementation plan
 
-This backlog contains 12 implementation tasks. Task 01 is implemented; tasks 02–12 are not implemented. Execute numbered tasks in order; each file lists the prerequisites needed to begin it. Each task should be a focused, reviewable change with its own validation evidence.
+This backlog contains 12 implementation tasks. Implementation status is tracked in the table below. Execute numbered tasks in order; each file lists the prerequisites needed to begin it. Each task should be a focused, reviewable change with its own validation evidence.
 
 ## Source of truth and scope
 
@@ -19,7 +19,7 @@ Policies are static per run; experiments with different configurations use isola
 | Order | Task | Depends on | Status |
 | --- | --- | --- | --- |
 | 01 | [Establish the TypeScript development and test foundation](01-project-foundation.md) | None | Implemented |
-| 02 | [Load and validate per-key policies](02-policy-configuration.md) | 01 | Not implemented |
+| 02 | [Load and validate per-key policies](02-policy-configuration.md) | 01 | Implemented |
 | 03 | [Implement the local Token Bucket and reference tests](03-local-token-bucket.md) | 01, 02 | Not implemented |
 | 04 | [Implement the atomic Redis bucket store and connection lifecycle](04-redis-bucket-store.md) | 02, 03 | Not implemented |
 | 05 | [Deliver the minimal HTTP API with Redis rate limiting](05-http-rate-limiting.md) | 01, 02, 04 | Not implemented |
