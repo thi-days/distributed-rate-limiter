@@ -88,9 +88,15 @@ docker compose down
 
 The integration suite sends `PING` to real Redis and fails with setup instructions if it cannot connect. It defaults to `redis://127.0.0.1:6379`; export `REDIS_URL` to use another address. `.env.example` documents this variable; tests do not load `.env` automatically. Explicit suite paths make missing test files fail instead of reporting empty integration coverage.
 
-Load policies at startup with `RATE_LIMIT_CONFIG_PATH=config/demo.json node dist/index.js`. The demonstration registers `demo-client` with defaults of 100 tokens and 100 tokens/minute, plus `demo-client-custom` with overrides. The JSON requires `defaults` (`capacity`, `refillPerMinute`) and a nonempty `clients` list; each client has a distinct, case-sensitive, whitespace-free `apiKey` and optional independent overrides. Policy values must be positive safe integers; request cost is always 1. Unknown fields are rejected.
+Load policies at startup with `RATE_LIMIT_CONFIG_PATH=config/demo.json node dist/main.js`. The demonstration registers `demo-client` with defaults of 100 tokens and 100 tokens/minute, plus `demo-client-custom` with overrides. The JSON requires `defaults` (`capacity`, `refillPerMinute`) and a nonempty `clients` list; each client has a distinct, case-sensitive, whitespace-free `apiKey` and optional independent overrides. Policy values must be positive safe integers; request cost is always 1. Unknown fields are rejected.
 
 `REDIS_TIMEOUT_MS` defaults to 20 and `REDIS_PROBE_INTERVAL_MS` to 1000; overrides must be positive safe integers in milliseconds. Export these variables explicitly; `.env` is not loaded automatically. Invalid configuration exits with a redacted error. Policies remain fixed for the process lifetime; experiments with different policies must use isolated bucket state. The shared registry exposes the same frozen policy for both store implementations and returns no policy for unknown keys.
+
+`src/index.ts` exports the public modules; `src/main.ts` wires dependencies and runs the process. HTTP routes and middleware live under `src/http/`, and `main.ts` uses `app.listen()` and closes HTTP connections before Redis during shutdown. Importing these modules does not start the service.
+
+Run the API with `RATE_LIMIT_CONFIG_PATH=config/demo.json node dist/main.js`, then request `GET /api/resource` with `X-API-Key: demo-client`. `GET /health` bypasses limiting. `PORT` defaults to 3000 (0 selects an ephemeral port); `INSTANCE_ID` defaults to `api-1` and accepts 1–64 ASCII letters, digits, dots, underscores, or hyphens. Responses expose this public label in `X-Instance-ID`; do not put secrets in it.
+
+Resource responses include the token-bucket capacity and whole remaining tokens using the pinned Internet-Draft 11 header format. Denials return 429 with `Retry-After` rounded up to seconds, with a minimum of one. SIGTERM and SIGINT stop accepting requests and drain active connections for at most 10 seconds, then force-close remaining connections and close Redis. Repeated signals share the same shutdown operation.
 
 ### Development dependencies
 

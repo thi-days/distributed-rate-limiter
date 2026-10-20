@@ -1,6 +1,6 @@
 # 05 — Deliver the minimal HTTP API with Redis rate limiting
 
-**Status**: Not implemented
+**Status**: Implemented
 
 ## Description
 

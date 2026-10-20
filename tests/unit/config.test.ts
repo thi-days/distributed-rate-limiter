@@ -99,7 +99,7 @@ test('missing, unreadable and malformed configuration fails startup with redacte
   for (const testedPath of ['', `${configPath}/secret-path`, configPath]) {
     assert.throws(() => loadConfiguration({ RATE_LIMIT_CONFIG_PATH: testedPath }), ConfigurationError);
 
-    const result = spawnSync(process.execPath, ['dist/index.js'], {
+    const result = spawnSync(process.execPath, ['dist/main.js'], {
       encoding: 'utf8', env: { ...process.env, RATE_LIMIT_CONFIG_PATH: testedPath },
     });
 
