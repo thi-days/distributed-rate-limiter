@@ -14,3 +14,5 @@ if (require.main === module) {
     process.exitCode = 1;
   }
 }
+
+export { RedisBucketStore, RedisUnavailableError, redisBucketKey } from './redis-bucket-store.js';

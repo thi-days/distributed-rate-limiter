@@ -1,6 +1,6 @@
 # 04 — Implement the atomic Redis bucket store and connection lifecycle
 
-**Status**: Not implemented
+**Status**: Implemented
 
 ## Description
 

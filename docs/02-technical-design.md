@@ -66,6 +66,8 @@ Each API Key has its own bucket:
 - `tokens`: remaining available tokens.
 - `last_refill`: timestamp of the last refill calculation.
 
+Buckets use the shared namespace `rate-limiter:bucket:<sha256(API Key)>`, keeping raw API Keys out of Redis key names. Idle TTL is refreshed on every decision to `ceil(capacity * 60000 / refillPerMinute)` milliseconds.
+
 Bucket updates must be atomic. One Lua operation refills, consumes, and saves the bucket, avoiding concurrent requests spending the same token. Redis server time gives instances a common refill clock. Idle buckets expire only after enough time to refill completely.
 
 ### HTTP Behavior
