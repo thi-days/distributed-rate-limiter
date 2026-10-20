@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { createClient } from 'redis';
-import { RedisBucketStore, RedisUnavailableError, redisBucketKey } from '../../src/redis-bucket-store.js';
+import { RedisBucketStore, RedisUnavailableError, redisBucketKey } from '../../src/stores/redis/redis-bucket-store.js';
 import { bucketReferences } from '../helpers/bucket-reference.js';
 import { consumeToken, initialBucket } from '../../src/token-bucket.js';
 

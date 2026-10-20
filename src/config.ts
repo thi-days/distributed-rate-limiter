@@ -25,16 +25,16 @@ export class ConfigurationError extends Error {
   }
 }
 
-function record(value: unknown): value is Record<string, unknown> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function positiveInteger(value: unknown): value is number {
+function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
 /** Reject unknown properties; required fields are validated separately. */
-function fields(value: Record<string, unknown>, allowedFields: string[]): boolean {
+function isAllowedFieldSet(value: Record<string, unknown>, allowedFields: string[]): boolean {
   return Object.keys(value).every((field) => allowedFields.includes(field));
 }
 
@@ -42,7 +42,7 @@ function fields(value: Record<string, unknown>, allowedFields: string[]): boolea
 function setting(value: string | undefined, defaultValue: number, settingName: string): number {
   const parsedValue = value === undefined ? defaultValue : Number(value);
 
-  if (!positiveInteger(parsedValue)) throw new ConfigurationError(`${settingName} must be a positive safe integer`);
+  if (!isPositiveInteger(parsedValue)) throw new ConfigurationError(`${settingName} must be a positive safe integer`);
 
   return parsedValue;
 }
@@ -72,9 +72,9 @@ export function loadConfiguration(
     throw new ConfigurationError('unable to read or parse the JSON file');
   }
 
-  if (!record(configData) || !fields(configData, ['defaults', 'clients']) ||
-      !record(configData.defaults) || !fields(configData.defaults, ['capacity', 'refillPerMinute']) ||
-      !positiveInteger(configData.defaults.capacity) || !positiveInteger(configData.defaults.refillPerMinute) ||
+  if (!isRecord(configData) || !isAllowedFieldSet(configData, ['defaults', 'clients']) ||
+      !isRecord(configData.defaults) || !isAllowedFieldSet(configData.defaults, ['capacity', 'refillPerMinute']) ||
+      !isPositiveInteger(configData.defaults.capacity) || !isPositiveInteger(configData.defaults.refillPerMinute) ||
       !Array.isArray(configData.clients) || configData.clients.length === 0) {
     throw new ConfigurationError('expected defaults and a nonempty clients list with valid policy values');
   }
@@ -82,11 +82,11 @@ export function loadConfiguration(
   const policies = new Map<string, Policy>();
 
   for (const client of configData.clients as unknown[]) {
-    if (!record(client) || !fields(client, ['apiKey', 'capacity', 'refillPerMinute']) ||
+    if (!isRecord(client) || !isAllowedFieldSet(client, ['apiKey', 'capacity', 'refillPerMinute']) ||
         typeof client.apiKey !== 'string' || !/^[^\s]+$/u.test(client.apiKey) ||
         policies.has(client.apiKey) ||
-        ('capacity' in client && !positiveInteger(client.capacity)) ||
-        ('refillPerMinute' in client && !positiveInteger(client.refillPerMinute))) {
+        ('capacity' in client && !isPositiveInteger(client.capacity)) ||
+        ('refillPerMinute' in client && !isPositiveInteger(client.refillPerMinute))) {
       throw new ConfigurationError('clients must have distinct nonempty whitespace-free keys and valid overrides');
     }
 

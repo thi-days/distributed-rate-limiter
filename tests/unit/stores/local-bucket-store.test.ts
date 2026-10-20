@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { Policy } from '../../src/config.js';
-import { LocalBucketStore } from '../../src/local-bucket-store.js';
-import { bucketReferences } from '../helpers/bucket-reference.js';
+import type { Policy } from '../../../src/config.js';
+import { LocalBucketStore } from '../../../src/stores/local-bucket-store.js';
+import { bucketReferences } from '../../helpers/bucket-reference.js';
 
 const policy: Policy = { capacity: 10, refillPerMinute: 60, requestCost: 1 };
 const configuration = { policyFor: (apiKey: string) => ['a', 'b'].includes(apiKey) ? policy : undefined };

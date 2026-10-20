@@ -2,7 +2,7 @@ import { loadConfiguration } from './config.js';
 
 export { ConfigurationError, loadConfiguration } from './config.js';
 export type { Configuration, Policy } from './config.js';
-export { LocalBucketStore } from './local-bucket-store.js';
+export { LocalBucketStore } from './stores/local-bucket-store.js';
 export { consumeToken, initialBucket } from './token-bucket.js';
 export type { BucketState, BucketUpdate, RateLimitDecision } from './token-bucket.js';
 
@@ -15,4 +15,4 @@ if (require.main === module) {
   }
 }
 
-export { RedisBucketStore, RedisUnavailableError, redisBucketKey } from './redis-bucket-store.js';
+export { RedisBucketStore, RedisUnavailableError, redisBucketKey } from './stores/redis/redis-bucket-store.js';

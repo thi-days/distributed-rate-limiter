@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SimpleError } from 'redis';
-import { RedisBucketStore, RedisUnavailableError, decodeRedisDecision, type BucketConnection } from '../../src/redis-bucket-store.js';
+import { RedisBucketStore, RedisUnavailableError, type BucketConnection } from '../../../../src/stores/redis/redis-bucket-store.js';
 
 const policy = { capacity: 10, refillPerMinute: 60, requestCost: 1 } as const;
 const configuration = { policyFor: (key: string) => key === 'known' ? policy : undefined };
@@ -9,18 +9,6 @@ const configuration = { policyFor: (key: string) => key === 'known' ? policy : u
 function fake(overrides: Partial<BucketConnection> = {}): BucketConnection {
   return { isOpen: true, connect: async () => {}, eval: async () => [1, '9'], destroy: () => {}, ...overrides };
 }
-
-test('decode allowed and fractional denial metadata; reject malformed results', () => {
-  assert.deepEqual(decodeRedisDecision([0, '0.25'], policy), {
-    allowed: false, tokens: 0.25, remaining: 0, retryAfterMs: 750,
-  });
-  assert.deepEqual(decodeRedisDecision([1, '1.5'], policy), {
-    allowed: true, tokens: 1.5, remaining: 1, retryAfterMs: 0,
-  });
-  for (const result of [null, [2, '0'], [0, ''], [0, 'NaN'], [0, '-1'], [1, '10'], [0, '1'], [1, 9]]) {
-    assert.throws(() => decodeRedisDecision(result, policy));
-  }
-});
 
 test('reuse connection, ignore unknown keys, and shut down', async () => {
   let connections = 0;

@@ -11,12 +11,13 @@
     "test": "tests"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-lua.mjs dist",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
     "test": "npm run test:unit",
-    "test:unit": "npm run build && tsc -p tsconfig.test.json && node --test .test-dist/tests/unit/*.test.js",
-    "test:integration": "tsc -p tsconfig.test.json && node --test .test-dist/tests/integration/*.test.js"
+    "test:unit": "npm run build && npm run test:compile && node --test \".test-dist/tests/unit/**/*.test.js\"",
+    "test:compile": "node -e \"require('node:fs').rmSync('.test-dist', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && node scripts/copy-lua.mjs .test-dist/src",
+    "test:integration": "npm run test:compile && node --test .test-dist/tests/integration/*.test.js"
   },
   "private": true,
   "types": "dist/index.d.ts",

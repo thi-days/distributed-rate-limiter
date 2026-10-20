@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks';
-import type { Configuration } from './config.js';
-import { consumeToken, initialBucket, type BucketState, type RateLimitDecision } from './token-bucket.js';
+import type { Configuration } from '../config.js';
+import { consumeToken, initialBucket, type BucketState, type RateLimitDecision } from '../token-bucket.js';
 
 /** Process-local fallback state, retained for the lifetime of this store. */
 export class LocalBucketStore {
