@@ -16,6 +16,7 @@ This API requires a rate-limiting that:
 1. We will use the Token Bucket to enforce the request limit.
 2. Each API key will have a bucket with a configurable capacity and refill rate.
 3. The Token Bucket was chosen because it does both allow controlled bursts and enforce the limit.
+4. Refill follows elapsed time and preserves fractional tokens up to capacity. Each allowed request consumes one token; denied requests consume none.
 
 ## Alternatives Considered
 

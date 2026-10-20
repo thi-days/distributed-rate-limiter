@@ -14,6 +14,7 @@ The solution must:
 
 1. We will use a Redis instance **shared accross all instances**.
 2. An external Redis approach was chosen instead of locally in-memory because **the rate-limit should be consistent** regardless instance the request is being processed.
+3. Bucket refill and consumption run together in Lua so concurrent requests cannot spend the same token.
 
 ## Alternatives Considered
 
@@ -29,11 +30,11 @@ Positive:
 
 - Allow horizontal scaling
 - Ensure consistency across multiple instances
-- Barely adds latency
-- Has atomic operations using Lua Scripts (INCR, DECR, etc)
+- Supports atomic bucket updates using Lua scripts
 
 Negative:
 
+- Adds a network operation; its overhead is evaluated against the P95 < 10ms target
 - Requires additional infra dependency
 - Failures affect API availability or rate-limit enforcement
 - Its deployment affects overall availability and consistency guarantees

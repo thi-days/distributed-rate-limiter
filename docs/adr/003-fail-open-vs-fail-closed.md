@@ -12,7 +12,11 @@ backend services to excessive traffic**.
 
 We will adopt a fail-open strategy **with local in-memory rate limiting as a fallback**.
 
-When Redis becomes unavailable, each API instance will temporarily enforce its own Token Bucket.
+When Redis has a connection failure or timeout, each API instance temporarily enforces its own Token Bucket. A valid Redis denial does not trigger fallback.
+
+Local buckets begin with 25% of capacity, rounded up, while keeping normal refill and maximum capacity. State is retained across outages until the process exits, avoiding a fresh allocation on every connection failure.
+
+When Redis recovers, shared limiting resumes without merging local consumption. The trade-off favors availability and partial protection over global consistency during the outage.
 
 ## Alternatives Considered
 
@@ -33,5 +37,5 @@ Negative:
 
 - Global rate limiting is not guaranteed during fallback.
 - Different instances may allow different request volumes.
-- Recovery requires switching back to distributed state.
+- Recovery uses surviving Redis state; lost buckets restart full, potentially granting extra budget.
 - Local fallback cannot replace upstream DDoS protection.
