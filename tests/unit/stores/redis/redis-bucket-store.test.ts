@@ -73,3 +73,62 @@ test('only connectivity errors qualify for fallback; denial remains a decision',
   assert.equal((await store.consume('known'))?.allowed, false);
   store.close();
 });
+
+test('probe reuses the connection without addressing or consuming a bucket', async () => {
+  let connections = 0;
+  const commands: { script: string; keys: string[] }[] = [];
+  const store = new RedisBucketStore(configuration, () => {
+    connections++;
+    return fake({
+      eval: async (script, options) => {
+        commands.push({ script, keys: options.keys });
+        return script === 'return 1' ? 1 : [1, '9'];
+      },
+    });
+  });
+
+  try {
+    await store.probe();
+    await store.consume('known');
+    await store.probe();
+
+    assert.equal(connections, 1);
+    assert.deepEqual(commands[0], { script: 'return 1', keys: [] });
+    assert.deepEqual(commands[2], { script: 'return 1', keys: [] });
+  } finally {
+    store.close();
+  }
+});
+
+test('probe timeout includes connecting and prevents delayed submission', async () => {
+  const connection = new Promise<void>(() => {});
+  let calls = 0;
+  const store = new RedisBucketStore({ ...configuration, redisTimeoutMs: 5 }, () => fake({
+    connect: () => connection,
+    eval: async () => { calls++; return 1; },
+  }));
+
+  try {
+    await assert.rejects(store.probe(), RedisUnavailableError);
+    assert.equal(calls, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test('probe rejects command failures and malformed replies without classifying them as outages', async () => {
+  for (const reply of [new SimpleError('WRONGPASS secret'), 'unexpected']) {
+    const store = new RedisBucketStore(configuration, () => fake({
+      eval: async () => {
+        if (reply instanceof Error) throw reply;
+        return reply;
+      },
+    }));
+
+    try {
+      await assert.rejects(store.probe(), (error: unknown) => error instanceof Error && !(error instanceof RedisUnavailableError));
+    } finally {
+      store.close();
+    }
+  }
+});

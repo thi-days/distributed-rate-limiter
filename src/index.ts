@@ -7,3 +7,5 @@ export type { BucketState, BucketUpdate, RateLimitDecision } from './token-bucke
 export { RedisBucketStore, RedisUnavailableError, redisBucketKey } from './stores/redis/redis-bucket-store.js';
 
 export { createApplication } from './http/app.js';
+
+export { RateLimiter } from './rate-limiter.js';

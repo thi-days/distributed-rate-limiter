@@ -98,6 +98,10 @@ Run the API with `RATE_LIMIT_CONFIG_PATH=config/demo.json node dist/main.js`, th
 
 Resource responses include the token-bucket capacity and whole remaining tokens using the pinned Internet-Draft 11 header format. Denials return 429 with `Retry-After` rounded up to seconds, with a minimum of one. SIGTERM and SIGINT stop accepting requests and drain active connections for at most 10 seconds, then force-close remaining connections and close Redis. Repeated signals share the same shutdown operation.
 
+The `RateLimiter` uses Redis normally and selects the retained local store only on connection failure or timeout, including an outage at startup. Local buckets begin with 25% of capacity rounded up and keep their normal refill rate. Redis denials do not get a local retry. Recovery checks run without consuming tokens, once per second by default (`REDIS_PROBE_INTERVAL_MS`), with the same `REDIS_TIMEOUT_MS` deadline as consumption and no overlapping probes. The next check is scheduled after the previous check finishes.
+
+Recovery resumes the surviving Redis balance without merging local consumption; missing Redis buckets start full. Local balances remain available for later outages. During fallback, limits are per process and no longer globally consistent. An uncertain Redis write may already have spent a token; the request receives at most one local decision and is never retried in Redis. Other Redis errors produce the redacted HTTP 500 response. Shutdown stops recovery checks before draining HTTP requests, then closes Redis.
+
 ### Development dependencies
 
 TypeScript provides strict compilation and type checking; `@types/node` supplies Node.js types. ESLint with its JavaScript rules and `typescript-eslint` checks source, tests, and its own configuration, including deprecated API usage through type-aware linting. Node.js supplies the test runner and assertions, avoiding another test framework. The `redis` client supports the real Redis integration check and the documented shared-store architecture.

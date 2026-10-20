@@ -1,6 +1,6 @@
 # 06 — Coordinate fallback and recovery through the HTTP boundary
 
-**Status**: Not implemented
+**Status**: Implemented
 
 ## Description
 

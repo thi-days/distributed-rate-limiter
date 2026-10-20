@@ -80,7 +80,7 @@ Count `X-API-Key` occurrences case-insensitively in Node's `rawHeaders` before u
 
 Return or await asynchronous middleware work so Express 5 forwards rejections to a final four-argument error handler. That handler emits the documented JSON 500 response without leaking details, and delegates if headers were already sent. A completed denial must not call `next()` or invoke the resource handler. The HTTP adapter does not retry consumption. No generic rate-limiting package replaces the custom Token Bucket.
 
-Retain the Node HTTP server handle. On SIGTERM/SIGINT, stop accepting requests, drain active requests within a bounded shutdown deadline, then close Redis resources; force-close remaining connections at the deadline. Task 06 also stops recovery work. Shutdown is idempotent, and importing the application installs no signal handlers or listeners.
+Retain the Node HTTP server handle. On SIGTERM/SIGINT, stop accepting requests, drain active requests within a bounded shutdown deadline, then close Redis resources; force-close remaining connections at the deadline. Stop recovery work before draining, and ignore in-flight recovery results after shutdown begins. Shutdown is idempotent, and importing the application installs no signal handlers or listeners.
 
 Missing or malformed keys return HTTP 400; unregistered keys return HTTP 403 before store access. Allowed requests return HTTP 200. Exhausted buckets return HTTP 429 with `Retry-After`, rounded up to seconds until one token is available.
 

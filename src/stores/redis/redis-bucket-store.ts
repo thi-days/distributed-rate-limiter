@@ -3,7 +3,7 @@ import {
   SocketTimeoutError, ClientOfflineError, ClientClosedError,
 } from 'redis';
 import { createHash } from 'node:crypto';
-import type { Configuration, Policy } from '../../config.js';
+import type { Configuration } from '../../config.js';
 import type { RateLimitDecision } from '../../token-bucket.js';
 import { consumeScript } from './consume-script.js';
 import { decodeRedisDecision } from './redis-decision.js';
@@ -88,14 +88,32 @@ export class RedisBucketStore {
     const policy = this.configuration.policyFor(apiKey);
     if (policy === undefined) return undefined;
 
+    // Consume atomically in Redis and decode the resulting token balance.
+    const result = await this.execute(consumeScript, {
+      keys: [redisBucketKey(apiKey)], arguments: [String(policy.capacity), String(policy.refillPerMinute)],
+    });
+    return decodeRedisDecision(result, policy);
+  }
+
+  /** Check Redis without reading or consuming a client bucket; uses the same attempt deadline. */
+  async probe(): Promise<void> {
+    const result = await this.execute('return 1', { keys: [], arguments: [] });
+    if (result !== 1) throw new Error('Invalid Redis probe result');
+  }
+
+  private async execute(script: string, options: Parameters<BucketConnection['eval']>[1]): Promise<unknown> {
+    if (this.closed) throw new Error('Redis bucket store is closed');
+
+    // Include connection waiting and command execution in the same deadline.
     const session = this.getSession();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new RedisUnavailableError(new Error('Redis attempt timed out'))), this.timeoutMs);
     });
 
+    // Classify connectivity failures without retrying an uncertain command.
     try {
-      return await Promise.race([this.executeConsumption(session, apiKey, policy), deadline]);
+      return await Promise.race([this.executeCommand(session, script, options), deadline]);
     } catch (error) {
       if (error instanceof RedisUnavailableError || isConnectionFailure(error)) {
         if (this.session === session) this.discardSession();
@@ -116,16 +134,17 @@ export class RedisBucketStore {
     return this.session;
   }
 
-  private async executeConsumption(session: ConnectionSession, apiKey: string, policy: Policy): Promise<RateLimitDecision> {
+  private async executeCommand(
+    session: ConnectionSession,
+    script: string,
+    options: Parameters<BucketConnection['eval']>[1],
+  ): Promise<unknown> {
     await session.ready;
 
-    // A timed-out or closed session must never submit a delayed consumption.
+    // A timed-out or closed session must never submit a delayed command.
     if (this.closed || this.session !== session) throw new RedisUnavailableError(new Error('Connection discarded'));
 
-    const result = await session.client.eval(consumeScript, {
-      keys: [redisBucketKey(apiKey)], arguments: [String(policy.capacity), String(policy.refillPerMinute)],
-    });
-    return decodeRedisDecision(result, policy);
+    return session.client.eval(script, options);
   }
 
   private discardSession(): void {

@@ -42,29 +42,44 @@ for (const forceClose of [false, true]) {
   });
 }
 
-test('executable serves health and tolerates repeated shutdown signals', { timeout: 5000 }, async (t) => {
-  const child = spawn(process.execPath, ['dist/main.js'], {
-    env: { ...process.env, RATE_LIMIT_CONFIG_PATH: 'config/demo.json', PORT: '0' },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  t.after(() => { if (child.exitCode === null) child.kill('SIGKILL'); });
-  const exited = once(child, 'exit');
-  let output = '';
-  const port = await new Promise<number>((resolve, reject) => {
-    child.on('error', reject);
-    child.on('exit', () => reject(new Error('Process exited before listening')));
-    child.stdout.on('data', (chunk: Buffer) => {
-      output += chunk.toString();
-      const match = /listening on port (\d+)/u.exec(output);
-      if (match) resolve(Number(match[1]));
+for (const redisAvailable of [true, false]) {
+  test(`executable shuts down with repeated signals ${redisAvailable ? 'when healthy' : 'during fallback'}`, { timeout: 5000 }, async (t) => {
+    const child = spawn(process.execPath, ['dist/main.js'], {
+      env: {
+        ...process.env,
+        RATE_LIMIT_CONFIG_PATH: 'config/demo.json',
+        PORT: '0',
+        ...(!redisAvailable ? { REDIS_URL: 'redis://127.0.0.1:1' } : {}),
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
+    t.after(() => { if (child.exitCode === null) child.kill('SIGKILL'); });
+    const exited = once(child, 'exit');
+    let output = '';
+    const port = await new Promise<number>((resolve, reject) => {
+      child.on('error', reject);
+      child.on('exit', () => reject(new Error('Process exited before listening')));
+      child.stdout.on('data', (chunk: Buffer) => {
+        output += chunk.toString();
+        const match = /listening on port (\d+)/u.exec(output);
+        if (match) resolve(Number(match[1]));
+      });
+    });
+    // Exercise the real startup wiring before sending shutdown signals.
+    if (!redisAvailable) {
+      const resource = await fetch(`http://127.0.0.1:${port}/api/resource`, {
+        headers: { 'X-API-Key': 'demo-client' },
+      });
+      assert.equal(resource.status, 200);
+      await resource.text();
+    }
+    const response = await fetch(`http://127.0.0.1:${port}/health`);
+    assert.equal(response.status, 200);
+    await response.text();
+    child.kill('SIGTERM');
+    child.kill('SIGINT');
+    const [code, signal] = await exited;
+    assert.equal(code, 0);
+    assert.equal(signal, null);
   });
-  const response = await fetch(`http://127.0.0.1:${port}/health`);
-  assert.equal(response.status, 200);
-  await response.text();
-  child.kill('SIGTERM');
-  child.kill('SIGINT');
-  const [code, signal] = await exited;
-  assert.equal(code, 0);
-  assert.equal(signal, null);
-});
+}
