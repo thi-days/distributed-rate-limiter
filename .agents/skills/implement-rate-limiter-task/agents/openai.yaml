@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implement Rate Limiter Task"
+  short_description: "Deliver one project task against its acceptance criteria"
+  default_prompt: "Use $implement-rate-limiter-task to implement a project task. Ask which task if none is specified."
