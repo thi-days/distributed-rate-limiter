@@ -1,5 +1,7 @@
 # 10 — Automate quality and integration checks
 
+**Status**: Not implemented
+
 ## Description
 
 Automate the established checks in CI so reviewers can verify correctness without relying solely on portfolio screenshots or manual runs.

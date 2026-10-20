@@ -1,5 +1,7 @@
 # 05 — Deliver the minimal HTTP API with Redis rate limiting
 
+**Status**: Not implemented
+
 ## Description
 
 Create the demonstration resource, client identification, and lifecycle. Apply the Redis limiter once per resource request and translate its decision into the HTTP response. Deliver the healthy Redis path here; task 06 adds fallback and verifies the same HTTP contract during outages.

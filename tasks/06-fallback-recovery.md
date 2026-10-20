@@ -1,5 +1,7 @@
 # 06 — Coordinate fallback and recovery through the HTTP boundary
 
+**Status**: Not implemented
+
 ## Description
 
 Wire Redis and the local store into a fallback path using connection status and periodic recovery checks. Integrate this flow into the HTTP application and verify its response contract during fallback and after recovery.

@@ -1,5 +1,7 @@
 # 02 — Load and validate per-key policies
 
+**Status**: Not implemented
+
 ## Description
 
 Load a small startup JSON configuration and resolve one effective policy per registered API Key. No configuration service or live update mechanism is needed.

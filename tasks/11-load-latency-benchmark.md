@@ -1,5 +1,7 @@
 # 11 — Run reproducible k6 workloads and evaluate limiter latency
 
+**Status**: Not implemented
+
 ## Description
 
 Create reusable k6 workloads for normal traffic, depletion, and outage/recovery, and execute them with direct limiter timing to evaluate the P95 < 10ms target in the local three-instance environment. Keep deterministic correctness assertions in the integration suites. Deliver workload scripts, captured samples, repeated results, and the performance conclusion together; do not expand this task into performance optimization.

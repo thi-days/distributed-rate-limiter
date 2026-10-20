@@ -1,5 +1,7 @@
 # 12 — Publish reproducible portfolio evidence
 
+**Status**: Not implemented
+
 ## Description
 
 Present the implementation, engineering decisions, and experimental evidence as a concise case study.

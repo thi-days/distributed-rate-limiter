@@ -1,5 +1,7 @@
 # 08 — Deliver the three-instance topology and verify shared enforcement
 
+**Status**: Not implemented
+
 ## Description
 
 Run Redis, three API instances, and Nginx with the root Docker Compose file, making the architecture easy to reproduce locally. Demonstrate that one key has one shared budget across all three instances. Failure experiments belong to task 09; sustained load and latency measurement belong to task 11.

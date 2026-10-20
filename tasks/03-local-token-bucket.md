@@ -1,5 +1,7 @@
 # 03 — Implement the local Token Bucket and reference tests
 
+**Status**: Not implemented
+
 ## Description
 
 Implement the small, I/O-independent Token Bucket calculation and a typed decision usable by the local and Redis paths. Use it in a bounded process-local map for registered keys. Fallback coordination belongs to task 06.

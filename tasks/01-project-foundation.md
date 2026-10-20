@@ -1,5 +1,7 @@
 # 01 — Establish the TypeScript development and test foundation
 
+**Status**: Implemented
+
 ## Description
 
 Create the smallest maintainable Node.js/TypeScript project foundation with strict typing, linting, unit tests, and a separate Redis integration test entry point. The current package only has a placeholder failing test command.

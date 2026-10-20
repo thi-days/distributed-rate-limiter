@@ -1,5 +1,7 @@
 # 07 — Expose enforcement and failure evidence
 
+**Status**: Not implemented
+
 ## Description
 
 Add only the evidence needed to explain the experiments: decisions, store mode, transitions, and limiter duration. No observability platform is required.

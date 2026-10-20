@@ -1,5 +1,7 @@
 # 09 — Verify outages, bounded fallback, and recovery
 
+**Status**: Not implemented
+
 ## Description
 
 Run scoped Redis failure experiments to show availability, partial local protection, and restoration of shared enforcement.

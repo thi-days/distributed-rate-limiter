@@ -1,5 +1,7 @@
 # 04 — Implement the atomic Redis bucket store and connection lifecycle
 
+**Status**: Not implemented
+
 ## Description
 
 Deliver an application-ready Redis store: one Lua operation reads, refills, consumes, and persists the shared bucket, and a typed adapter handles results, bounded waits, and connection lifecycle. Fallback coordination belongs to task 06.

@@ -65,20 +65,28 @@ See the [implementation plan](./tasks/README.md) for task breakdown and acceptan
 
 ## How to run locally
 
-```bash
-docker compose up --build
-```
+Use Node.js 24 LTS (see `.nvmrc`) and npm. Install the locked dependencies with `npm ci`.
 
-It can also be tested through:
 ```bash
-curl \
-  -H "X-API-Key: customer-123" \
-  http://localhost:8080/api/resource
-```
-
-And to run the tests locally, you can use:
-```bash
+npm ci
+npm run build
+npm run lint
+npm run typecheck
 npm test
-npm run test:integration
-npm run test:load
 ```
+
+Source lives in `src/`, with unit tests in `tests/unit/` and real Redis checks in `tests/integration/`. The root `tsconfig.json` covers source, tests, and ESLint configuration for both editors and `npm run typecheck`, with explicit Node.js types. `tsconfig.build.json` emits source into `dist/`; tests compile into `.test-dist/`. Unit tests require no infrastructure and check that the built entry point runs in Node.js.
+
+Integration tests require Docker Compose or an existing Redis server:
+
+```bash
+docker compose up -d redis
+npm run test:integration
+docker compose down
+```
+
+The integration suite sends `PING` to real Redis and fails with setup instructions if it cannot connect. It defaults to `redis://127.0.0.1:6379`; export `REDIS_URL` to use another address. `.env.example` documents this variable; tests do not load `.env` automatically. Explicit suite paths make missing test files fail instead of reporting empty integration coverage.
+
+### Development dependencies
+
+TypeScript provides strict compilation and type checking; `@types/node` supplies Node.js types. ESLint with its JavaScript rules and `typescript-eslint` checks source, tests, and its own configuration, including deprecated API usage through type-aware linting. Node.js supplies the test runner and assertions, avoiding another test framework. The `redis` client supports the real Redis integration check and the documented shared-store architecture.
