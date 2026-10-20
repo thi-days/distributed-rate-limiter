@@ -1,6 +1,6 @@
 # 03 — Implement the local Token Bucket and reference tests
 
-**Status**: Not implemented
+**Status**: Implemented
 
 ## Description
 

@@ -20,7 +20,7 @@ Policies are static per run; experiments with different configurations use isola
 | --- | --- | --- | --- |
 | 01 | [Establish the TypeScript development and test foundation](01-project-foundation.md) | None | Implemented |
 | 02 | [Load and validate per-key policies](02-policy-configuration.md) | 01 | Implemented |
-| 03 | [Implement the local Token Bucket and reference tests](03-local-token-bucket.md) | 01, 02 | Not implemented |
+| 03 | [Implement the local Token Bucket and reference tests](03-local-token-bucket.md) | 01, 02 | Implemented |
 | 04 | [Implement the atomic Redis bucket store and connection lifecycle](04-redis-bucket-store.md) | 02, 03 | Not implemented |
 | 05 | [Deliver the minimal HTTP API with Redis rate limiting](05-http-rate-limiting.md) | 01, 02, 04 | Not implemented |
 | 06 | [Coordinate fallback and recovery through the HTTP boundary](06-fallback-recovery.md) | 03, 04, 05 | Not implemented |

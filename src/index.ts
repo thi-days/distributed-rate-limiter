@@ -2,6 +2,9 @@ import { loadConfiguration } from './config.js';
 
 export { ConfigurationError, loadConfiguration } from './config.js';
 export type { Configuration, Policy } from './config.js';
+export { LocalBucketStore } from './local-bucket-store.js';
+export { consumeToken, initialBucket } from './token-bucket.js';
+export type { BucketState, BucketUpdate, RateLimitDecision } from './token-bucket.js';
 
 if (require.main === module) {
   try {

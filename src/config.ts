@@ -1,13 +1,18 @@
 import { readFileSync } from 'node:fs';
 
 export interface Policy {
+  /** Maximum number of tokens the bucket can hold. */
   readonly capacity: number;
+  /** Number of tokens replenished per minute, continuously over elapsed time. */
   readonly refillPerMinute: number;
+  /** Tokens consumed by each allowed request; fixed at one. */
   readonly requestCost: 1;
 }
 
 export interface Configuration {
+  /** Maximum duration in milliseconds for a Redis attempt, including connection waiting. */
   readonly redisTimeoutMs: number;
+  /** Interval in milliseconds between Redis recovery probes during fallback. */
   readonly redisProbeIntervalMs: number;
   /** Exact, case-sensitive lookup; undefined means the key is not registered. */
   readonly policyFor: (apiKey: string) => Policy | undefined;
@@ -29,17 +34,17 @@ function positiveInteger(value: unknown): value is number {
 }
 
 /** Reject unknown properties; required fields are validated separately. */
-function fields(value: Record<string, unknown>, allowed: string[]): boolean {
-  return Object.keys(value).every((key) => allowed.includes(key));
+function fields(value: Record<string, unknown>, allowedFields: string[]): boolean {
+  return Object.keys(value).every((field) => allowedFields.includes(field));
 }
 
-/** Use the fallback only for an absent variable; invalid supplied values fail startup. */
-function setting(value: string | undefined, fallback: number, name: string): number {
-  const parsed = value === undefined ? fallback : Number(value);
+/** Use the default value only for an absent variable; invalid supplied values fail startup. */
+function setting(value: string | undefined, defaultValue: number, settingName: string): number {
+  const parsedValue = value === undefined ? defaultValue : Number(value);
 
-  if (!positiveInteger(parsed)) throw new ConfigurationError(`${name} must be a positive safe integer`);
+  if (!positiveInteger(parsedValue)) throw new ConfigurationError(`${settingName} must be a positive safe integer`);
 
-  return parsed;
+  return parsedValue;
 }
 
 /**
@@ -54,29 +59,29 @@ function setting(value: string | undefined, fallback: number, name: string): num
 export function loadConfiguration(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): Configuration {
-  const path = env.RATE_LIMIT_CONFIG_PATH;
+  const configPath = env.RATE_LIMIT_CONFIG_PATH;
 
-  if (!path || path.trim() === '') throw new ConfigurationError('RATE_LIMIT_CONFIG_PATH is required');
+  if (!configPath || configPath.trim() === '') throw new ConfigurationError('RATE_LIMIT_CONFIG_PATH is required');
 
-  let input: unknown;
+  let configData: unknown;
 
   try {
-    input = JSON.parse(readFileSync(path, 'utf8')) as unknown;
+    configData = JSON.parse(readFileSync(configPath, 'utf8')) as unknown;
   } catch {
     // Do not expose filesystem paths, JSON fragments, keys, or underlying error causes.
     throw new ConfigurationError('unable to read or parse the JSON file');
   }
 
-  if (!record(input) || !fields(input, ['defaults', 'clients']) ||
-      !record(input.defaults) || !fields(input.defaults, ['capacity', 'refillPerMinute']) ||
-      !positiveInteger(input.defaults.capacity) || !positiveInteger(input.defaults.refillPerMinute) ||
-      !Array.isArray(input.clients) || input.clients.length === 0) {
+  if (!record(configData) || !fields(configData, ['defaults', 'clients']) ||
+      !record(configData.defaults) || !fields(configData.defaults, ['capacity', 'refillPerMinute']) ||
+      !positiveInteger(configData.defaults.capacity) || !positiveInteger(configData.defaults.refillPerMinute) ||
+      !Array.isArray(configData.clients) || configData.clients.length === 0) {
     throw new ConfigurationError('expected defaults and a nonempty clients list with valid policy values');
   }
 
   const policies = new Map<string, Policy>();
 
-  for (const client of input.clients as unknown[]) {
+  for (const client of configData.clients as unknown[]) {
     if (!record(client) || !fields(client, ['apiKey', 'capacity', 'refillPerMinute']) ||
         typeof client.apiKey !== 'string' || !/^[^\s]+$/u.test(client.apiKey) ||
         policies.has(client.apiKey) ||
@@ -86,8 +91,8 @@ export function loadConfiguration(
     }
 
     policies.set(client.apiKey, Object.freeze({
-      capacity: (client.capacity ?? input.defaults.capacity) as number,
-      refillPerMinute: (client.refillPerMinute ?? input.defaults.refillPerMinute) as number,
+      capacity: (client.capacity ?? configData.defaults.capacity) as number,
+      refillPerMinute: (client.refillPerMinute ?? configData.defaults.refillPerMinute) as number,
       requestCost: 1,
     }));
   }
