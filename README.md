@@ -29,6 +29,7 @@ Token Bucket allows bursts and replenishes tokens continuously, so this is not a
 | -------------------------- | -------------------------------- |
 | Redis instead of in-memory | Share state across API instances |
 | Token Bucket               | Support controlled bursts        |
+| Express 5                  | Compose the HTTP middleware flow |
 | Lua Script                 | Atomic operations in Redis       |
 | Docker Compose             | Allow to reproduce locally       |
 | k6                         | Load and concurrency testing     |
@@ -37,7 +38,7 @@ Token Bucket allows bursts and replenishes tokens continuously, so this is not a
 
 This implementation has:
 
-1. The API HTTP in Node.js and TypeScript.
+1. The HTTP API in Express 5, Node.js, and TypeScript.
 2. A middleware to spot the API Key in the request.
 3. Local rate limiter as a fallback during Redis outages.
 4. Distributed rate limit using Redis.

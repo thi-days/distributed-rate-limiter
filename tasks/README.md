@@ -5,10 +5,11 @@ This backlog contains 12 implementation tasks. Implementation status is tracked 
 ## Source of truth and scope
 
 - [PRD](../docs/01-prd.md): FR-01–04, NFR-01–04, and product acceptance criteria.
-- [Technical design](../docs/02-technical-design.md): Node.js/TypeScript, Redis with Lua, local fallback, three API instances, Docker Compose, Nginx, and k6.
+- [Technical design](../docs/02-technical-design.md): Node.js/TypeScript with Express 5, Redis with Lua, local fallback, three API instances, Docker Compose, Nginx, and k6.
 - [ADR-001](../docs/adr/001-redis-vs-in-memory.md): shared Redis state.
 - [ADR-002](../docs/adr/002-token-bucket-algorithm.md): configurable Token Buckets and controlled bursts.
 - [ADR-003](../docs/adr/003-fail-open-vs-fail-closed.md): local in-memory fallback, with temporarily weaker global enforcement.
+- [ADR-004](../docs/adr/004-express-http-boundary.md): Express 5 middleware at the HTTP boundary, with an independent limiter core.
 
 Authentication, registration, billing, dashboards, additional limiting algorithms, alternative failure strategies, and production HA infrastructure are outside this plan. API-key extraction is an identification contract, not authentication.
 
@@ -48,6 +49,7 @@ Numeric order is the recommended delivery sequence; dependencies describe the ac
 | ADR-001: Redis | 04, 08 | 04, 08 |
 | ADR-002: Token Bucket | 02–06 | 03–06, 08, 11 |
 | ADR-003: local fallback | 03, 06 | 06, 09, 11 |
+| ADR-004: Express HTTP boundary | 05–08 | 05, 06, 08 |
 
 ## Completion standard
 

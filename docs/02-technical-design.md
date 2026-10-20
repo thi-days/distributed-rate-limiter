@@ -22,6 +22,7 @@ rate limits using local in-memory state.
 | Distributed state       | Redis                    | [ADR-001](./adr/001-redis-vs-in-memory.md)       |
 | Rate limiting algorithm | Token Bucket             | [ADR-002](./adr/002-token-bucket-algorithm.md)   |
 | Failure strategy        | Local in-memory fallback | [ADR-003](./adr/003-fail-open-vs-fail-closed.md) |
+| HTTP framework          | Express 5                | [ADR-004](./adr/004-express-http-boundary.md) |
 
 ## 4. Request Flow
 
@@ -38,6 +39,7 @@ rate limits using local in-memory state.
 ### Technology Stack
 
 - Node.js + TypeScript
+- Express 5 for the HTTP boundary
 - Redis
 - Lua scripts for atomic operations
 - Docker Compose
@@ -71,6 +73,14 @@ Buckets use the shared namespace `rate-limiter:bucket:<sha256(API Key)>`, keepin
 Bucket updates must be atomic. One Lua operation refills, consumes, and saves the bucket, avoiding concurrent requests spending the same token. Redis server time gives instances a common refill clock. Idle buckets expire only after enough time to refill completely.
 
 ### HTTP Behavior
+
+Express 5 composes route-scoped identification, policy lookup, and limiter middleware before the resource handler. The algorithm, policy registry, and stores remain independent of Express. Application construction is separate from listening and process signal handling, allowing tests to inject dependencies and start isolated ephemeral-port servers with the existing Node.js test runner.
+
+Count `X-API-Key` occurrences case-insensitively in Node's `rawHeaders` before using the parsed value; normalized header getters alone cannot establish that only one field was sent. Preserve case-sensitive key values. Keep `/health` outside this middleware chain and use API keys, never client IP or forwarded headers, as bucket identity. Leave `trust proxy` disabled; Nginx must preserve the identification contract.
+
+Return or await asynchronous middleware work so Express 5 forwards rejections to a final four-argument error handler. That handler emits the documented JSON 500 response without leaking details, and delegates if headers were already sent. A completed denial must not call `next()` or invoke the resource handler. The HTTP adapter does not retry consumption. No generic rate-limiting package replaces the custom Token Bucket.
+
+Retain the Node HTTP server handle. On SIGTERM/SIGINT, stop accepting requests, drain active requests within a bounded shutdown deadline, then close Redis resources; force-close remaining connections at the deadline. Task 06 also stops recovery work. Shutdown is idempotent, and importing the application installs no signal handlers or listeners.
 
 Missing or malformed keys return HTTP 400; unregistered keys return HTTP 403 before store access. Allowed requests return HTTP 200. Exhausted buckets return HTTP 429 with `Retry-After`, rounded up to seconds until one token is available.
 
