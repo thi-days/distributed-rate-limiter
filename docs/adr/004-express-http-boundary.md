@@ -4,15 +4,15 @@
 
 ## Context
 
-The demonstration API needs two endpoints, API-key identification, rate-limit response metadata, and consistent error handling. The case study centers on distributed enforcement, so HTTP framework concerns should remain separate from the algorithm and store implementations.
+The demonstration API needs two endpoints, API-key identification, rate-limit response metadata, and consistent error handling. The case study centers on distributed enforcement, so libraries should handle counting and response headers without custom infrastructure.
 
 ## Decision
 
-Use Express 5 with TypeScript for the HTTP boundary. Compose route-scoped identification, policy lookup, and limiter middleware before the resource handler; register health separately and a JSON error handler last. Keep policy, Token Bucket, Redis, and fallback logic independent of Express.
+Use Express 5 with TypeScript for the HTTP boundary. Compose route-scoped identification, policy lookup, and limiter middleware before the resource handler; register health separately and a JSON error handler last. Keep the policy table independent of Express and use the library middleware directly, without a reusable limiter framework.
 
-Construct the application separately from listening and process lifecycle management. Use the existing Node.js test runner and native HTTP clients for boundary tests. Add Express and matching types in task 05 without introducing another build or test toolchain.
+Construct the application separately from listening and process lifecycle management. Use the existing Node.js test runner and native HTTP clients for boundary tests. Use the existing TypeScript build and Node.js test runner.
 
-Inspect raw header occurrences for duplicate API-key fields before reading normalized values. Use API keys as bucket identity and leave `trust proxy` disabled, including behind Nginx. Preserve the same HTTP contract through the proxy.
+Inspect raw header occurrences for duplicate API-key fields before reading normalized values. Use API keys as counter identity and leave `trust proxy` disabled, including behind Nginx. Nginx rejects comma-separated key values because it joins duplicate fields with commas.
 
 ## Alternatives Considered
 
@@ -26,7 +26,7 @@ Inspect raw header occurrences for duplicate API-key fields before reading norma
 Positive:
 
 - Makes request ordering and HTTP response handling explicit through middleware.
-- Keeps the distributed limiter reusable outside Express.
+- Uses the libraries' middleware and store APIs directly.
 - Preserves the existing TypeScript build and Node.js tests.
 
 Negative:

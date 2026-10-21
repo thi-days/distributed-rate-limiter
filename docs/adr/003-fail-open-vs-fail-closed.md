@@ -10,32 +10,32 @@ backend services to excessive traffic**.
 
 ## Decision
 
-We will adopt a fail-open strategy **with local in-memory rate limiting as a fallback**.
+Use `express-rate-limit` with `passOnStoreError: true`: allow valid clients' requests when the Redis store reports an error. A normal denial still returns 429.
 
-When Redis has a connection failure or timeout, each API instance temporarily enforces its own Token Bucket. A valid Redis denial does not trigger fallback.
+There is no local fallback. The API remains available, but it has no rate-limit protection during store failures. This also applies to store configuration errors, so failure logs matter.
 
-Local buckets begin with 25% of capacity, rounded up, while keeping normal refill and maximum capacity. State is retained across outages until the process exits, avoiding a fresh allocation on every connection failure.
+The native Redis client reconnects automatically. When Redis returns, shared counting resumes without counting requests served during the outage. Lost counters start fresh.
 
-When Redis recovers, shared limiting resumes without merging local consumption. The trade-off favors availability and partial protection over global consistency during the outage.
+For costly backend operations, an available Redis deployment and conservative local limits can reduce the risk of overload; rejecting requests can be appropriate when a strict budget matters more than availability. Those measures add infrastructure or failure coordination. They are deliberately excluded to keep this demonstration small.
 
 ## Alternatives Considered
 
-| Algorithm      | Reason for rejection                                                          |
-| -------------- | ----------------------------------------------------------------------------- |
-| Fail Closed    | It would make the API unavailable to legitimate clients during Redis outages. |
-| Pure Fail Open | It removes traffic protection during infrastructure failures.                 |
+| Algorithm      | Reason for rejection                                                                           |
+| -------------- | ---------------------------------------------------------------------------------------------- |
+| Fail Closed    | It would make the API unavailable to legitimate clients during Redis outages.                  |
+| Local fallback | Provides partial protection, but adds separate budgets and recovery behavior beyond this demo. |
 
 ## Consequences
 
 Positive:
 
 - Improves API availability even during Redis outages.
-- Maintains partial protection against excessive traffic.
+- Avoids a second limiter and custom recovery coordination.
 - Does not require a secondary external data store.
 
 Negative:
 
-- Global rate limiting is not guaranteed during fallback.
-- Different instances may allow different request volumes.
-- Recovery uses surviving Redis state; lost buckets restart full, potentially granting extra budget.
-- Local fallback cannot replace upstream DDoS protection.
+- All rate-limit protection is lost during store failures.
+- Excess traffic can overload the backend during an outage.
+- Requests made during the outage are not counted after recovery; lost counters start fresh.
+- This limiter does not replace upstream DDoS protection.

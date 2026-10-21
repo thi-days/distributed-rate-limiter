@@ -11,18 +11,11 @@
     "skipLibCheck": true,
     "rootDir": ".",
     "outDir": "dist",
-    "declaration": true,
     "sourceMap": true,
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "noEmit": true,
     "allowJs": true,
     "checkJs": true
   },
-  "include": [
-    "src/**/*.ts",
-    "tests/**/*.ts",
-    "eslint.config.mjs"
-  ]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "eslint.config.mjs"]
 }

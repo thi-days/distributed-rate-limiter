@@ -23,7 +23,7 @@ We need to introduce rate limiting to ensure fair API usage, protect system reso
 
 - NFR-01: Rate limits must be enforced across multiple API instances.
 - NFR-02: The system must support at least 3 API instances.
-- NFR-03: Rate limiting overhead must remain below 10ms (P95).
+- NFR-03: Keep request handling lightweight; local latency measurements are informative, not a production guarantee.
 - NFR-04: Temporary infrastructure failures must not make the entire API unavailable.
 
 ## 5. Out of Scope
@@ -31,6 +31,8 @@ We need to introduce rate limiting to ensure fair API usage, protect system reso
 - User authentication and registration.
 - Customer billing and subscription management.
 - Administrative dashboard.
+- Authentication, billing, and production-grade overload protection during Redis outages.
+- Custom limiting algorithms and local fallback coordination.
 
 ## 6. Acceptance Criteria
 
@@ -42,5 +44,5 @@ We need to introduce rate limiting to ensure fair API usage, protect system reso
 ## 7. Success Metrics
 
 - Rate limit enforcement correctness under concurrent traffic.
-- P95 latency overhead below 10ms.
-- Successful request processing during simulated infrastructure failures.
+- Reproducible local execution and clear response behavior.
+- Successful request processing during Redis failures, with rate limiting temporarily bypassed.

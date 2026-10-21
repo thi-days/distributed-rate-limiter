@@ -12,27 +12,26 @@ The solution must enforce rate limits per API Key across multiple backend instan
 
 Each API instance uses a shared Redis store to enforce rate limits.
 
-If Redis becomes unavailable, instances temporarily enforce
-rate limits using local in-memory state.
+If Redis becomes unavailable, instances allow requests without rate limiting. This keeps the demonstration API available but leaves it unprotected against excessive traffic during the outage.
 
 ## 3. Technical Decisions
 
-| Decision                | Choice                   | ADR                                              |
-| ----------------------- | ------------------------ | ------------------------------------------------ |
-| Distributed state       | Redis                    | [ADR-001](./adr/001-redis-vs-in-memory.md)       |
-| Rate limiting algorithm | Token Bucket             | [ADR-002](./adr/002-token-bucket-algorithm.md)   |
-| Failure strategy        | Local in-memory fallback | [ADR-003](./adr/003-fail-open-vs-fail-closed.md) |
-| HTTP framework          | Express 5                | [ADR-004](./adr/004-express-http-boundary.md) |
+| Decision                | Choice                          | ADR                                              |
+| ----------------------- | ------------------------------- | ------------------------------------------------ |
+| Distributed state       | Redis                           | [ADR-001](./adr/001-redis-vs-in-memory.md)       |
+| Rate limiting algorithm | Fixed window                    | [ADR-002](./adr/002-fixed-window-algorithm.md)   |
+| Failure strategy        | Allow requests without limiting | [ADR-003](./adr/003-fail-open-vs-fail-closed.md) |
+| HTTP framework          | Express 5                       | [ADR-004](./adr/004-express-http-boundary.md)    |
 
 ## 4. Request Flow
 
 1. Client sends a request containing an API Key in `X-API-Key`.
 2. Load Balancer forwards the request to an API instance.
-3. Rate Limiter resolves the registered API Key's policy and checks its token bucket in Redis.
-4. Redis atomically calculates and updates available tokens.
-5. If a token is available, the request continues.
+3. Rate Limiter resolves the registered API Key's policy and checks its shared request count in Redis.
+4. The library atomically increments the key's Redis counter.
+5. If the request count is within the configured limit, the request continues.
 6. Otherwise, the API responds with HTTP 429.
-7. If Redis is unavailable, local rate limiting is used.
+7. If the Redis store reports an error, the request continues without rate limiting.
 
 ## 5. Implementation
 
@@ -41,95 +40,74 @@ rate limits using local in-memory state.
 - Node.js + TypeScript
 - Express 5 for the HTTP boundary
 - Redis
-- Lua scripts for atomic operations
+- `express-rate-limit` and `rate-limit-redis` for shared counters and HTTP responses
 - Docker Compose
 - Nginx as Load Balancer
-- k6 for load testing
 
 ### Rate Limiting Configuration
 
-- Bucket capacity: 100 tokens
-- Refill rate: 100 tokens/minute
-- Token cost: 1 per request
-- Bucket identification: API Key
+- Default client: 10 requests per one-minute window.
+- Custom client: 10 requests per one-minute window.
+- Identification: API Key, without authentication.
 
-A startup JSON file defines registered keys, defaults, and per-key overrides, without adding authentication. Policies are fixed per run; live updates and migration are outside scope. Different policy experiments use isolated state.
+A small typed table in `src/config.ts` defines the two demonstration clients. Policies stay fixed during a run. Different policy experiments use fresh Redis state; live configuration updates are outside scope.
 
-### Token Bucket Behavior
+### Fixed Window Behavior
 
-For each request, refill by elapsed time up to capacity, then consume one token or reject. Preserve fractional refill, including on denials.
-
-This permits bursts, not a strict rolling-minute cap: a full default bucket accepts 100 simultaneous requests, rejects the next, and earns one token after 600ms.
+Each key's window starts on its first request and expires after one minute. The library counts requests and returns 429 after the allowance is used. Requests do not earn capacity gradually. Requests near both sides of a reset can exceed the nominal limit over a rolling minute; a sliding window is more suitable when that boundary burst is unacceptable.
 
 ### Redis State
 
-Each API Key has its own bucket:
+`rate-limit-redis` owns the atomic counting scripts and expiry. Keys use the namespace `rate-limiter:window:<sha256(API Key)>`, keeping raw keys out of Redis names. All instances use the same namespace and policy table.
 
-- `tokens`: remaining available tokens.
-- `last_refill`: timestamp of the last refill calculation.
-
-Buckets use the shared namespace `rate-limiter:bucket:<sha256(API Key)>`, keeping raw API Keys out of Redis key names. Idle TTL is refreshed on every decision to `ceil(capacity * 60000 / refillPerMinute)` milliseconds.
-
-Bucket updates must be atomic. One Lua operation refills, consumes, and saves the bucket, avoiding concurrent requests spending the same token. Redis server time gives instances a common refill clock. Idle buckets expire only after enough time to refill completely.
+The native Redis client reconnects automatically. Offline request queues are disabled and commands have a 100ms timeout, so requests do not wait indefinitely for the limiter. A timed-out request may already have incremented Redis; it still proceeds under fail-open. This demo does not promise exact accounting across network failures.
 
 ### HTTP Behavior
 
-Express 5 composes route-scoped identification, policy lookup, and limiter middleware before the resource handler. The algorithm, policy registry, and stores remain independent of Express. Application construction is separate from listening and process signal handling, allowing tests to inject dependencies and start isolated ephemeral-port servers with the existing Node.js test runner.
+Express 5 validates the API key, looks up its policy, and runs the library middleware before the resource handler. Configuration remains independent of Express. Constructing the app does not start the server or open Redis connections.
 
-Count `X-API-Key` occurrences case-insensitively in Node's `rawHeaders` before using the parsed value; normalized header getters alone cannot establish that only one field was sent. Preserve case-sensitive key values. Keep `/health` outside this middleware chain and use API keys, never client IP or forwarded headers, as bucket identity. Leave `trust proxy` disabled; Nginx must preserve the identification contract.
+Count duplicate `X-API-Key` fields in Node's raw headers before using the parsed value. Keys remain case-sensitive, and `trust proxy` stays disabled. Nginx rejects comma-separated key values to catch duplicate fields joined by the proxy.
 
-Return or await asynchronous middleware work so Express 5 forwards rejections to a final four-argument error handler. That handler emits the documented JSON 500 response without leaking details, and delegates if headers were already sent. A completed denial must not call `next()` or invoke the resource handler. The HTTP adapter does not retry consumption. No generic rate-limiting package replaces the custom Token Bucket.
+Missing or malformed keys return 400; unregistered keys return 403 before store access. Allowed requests return 200. Exhausted limits return 429 with `Retry-After`. `express-rate-limit` supplies `RateLimit` and `RateLimit-Policy` using its `draft-8` format. These headers are absent when the store fails, because there is no reliable count.
 
-Retain the Node HTTP server handle. On SIGTERM/SIGINT, stop accepting requests, drain active requests within a bounded shutdown deadline, then close Redis resources; force-close remaining connections at the deadline. Stop recovery work before draining, and ignore in-flight recovery results after shutdown begins. Shutdown is idempotent, and importing the application installs no signal handlers or listeners.
-
-Missing or malformed keys return HTTP 400; unregistered keys return HTTP 403 before store access. Allowed requests return HTTP 200. Exhausted buckets return HTTP 429 with `Retry-After`, rounded up to seconds until one token is available.
-
-Responses report capacity and remaining tokens through `RateLimit-Policy` and `RateLimit`, following [Internet-Draft 11](https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-ratelimit-headers-11), not a published RFC. `GET /health` bypasses limiting to keep fallback-capable APIs reachable.
+`GET /health` bypasses the limiter and reports whether HTTP is serving, not whether rate limiting is available. Internal HTTP errors return a small JSON 500 response without details. SIGTERM/SIGINT stop accepting requests, allow up to ten seconds for active work, then close Redis.
 
 ## 6. Failure Handling
 
-When Redis becomes unavailable:
+`passOnStoreError: true` allows requests when the store reports an error. This includes more than connection failures; a store configuration error can also bypass limiting. Error logs omit underlying error details, keys, and credentials. Node-redis handles reconnection, and the store scripts are reloaded when the connection becomes ready, including after an outage at startup.
 
-- The application switches to local Token Bucket limiting.
-- Each instance maintains independent rate limits.
-- Global rate limiting consistency is temporarily lost.
-- Redis connectivity is periodically rechecked, once per second by default.
-- Distributed limiting resumes when Redis recovers, without merging local consumption.
+During an outage there is **no rate-limit protection**, either shared or local. After recovery, the surviving Redis counter applies again. Lost counters start fresh; requests served without Redis are not reconciled afterward.
 
-Local buckets start with 25% of capacity, rounded up, and retain the normal refill rate and maximum capacity. With the default policy, each instance starts with 25 tokens. This reduces the initial outage burst but does not impose a global cap.
-
-Local state is kept per registered key across outages until the process exits. Re-entering fallback reuses that state with elapsed refill rather than granting a fresh allocation.
-
-Redis attempts default to a configurable 20ms timeout. Only connection failures/timeouts activate fallback, not denials or programming/configuration errors. Uncertain consumption is not retried: it may already have happened. Recovery uses Redis state; lost buckets start full.
+For a service handling expensive work, an available Redis deployment plus conservative local limits can reduce exposure during failures. If a hard budget must be respected, rejecting requests while the limit cannot be checked may be the better choice. The right choice depends on the cost of excess traffic versus rejected requests. This demonstration chooses simple fail-open and leaves those additional protections outside scope.
 
 ## 7. Testing Strategy
 
-| Test                     | Expected Result               |
-| ------------------------ | ----------------------------- |
-| Requests within limit    | HTTP 200                      |
-| Requests exceeding limit | HTTP 429                      |
-| Concurrent requests      | Atomic token consumption      |
-| Multiple API instances   | Shared rate limit enforced    |
-| Redis unavailable        | Local fallback activated      |
-| Redis recovery           | Distributed limiting restored |
-| Load testing             | P95 overhead below 10ms       |
+| Test                     | Expected Result                    |
+| ------------------------ | ---------------------------------- |
+| Requests within limit    | HTTP 200                           |
+| Requests exceeding limit | HTTP 429                           |
+| Concurrent requests      | Atomic shared counting             |
+| Multiple API instances   | Shared rate limit enforced         |
+| Redis unavailable        | Requests allowed without limiting  |
+| Redis recovery           | Distributed limiting restored      |
+| Local execution          | Reproducible setup and experiments |
 
-The experiments demonstrate shared enforcement, outage protection/recovery, and latency. Measure limiter duration separately from HTTP latency, recording the environment, load, and repeated results. A generator that cannot sustain the load cannot establish a pass.
+The experiments demonstrate shared enforcement, independent keys, outages, and recovery. Test the application integration rather than reimplementing the library's algorithm tests. Local latency measurements must identify their environment and are not a production guarantee.
 
 ## 8. Trade-offs
 
 ### Benefits
 
 - Consistent rate limiting across multiple instances.
-- Low-latency token management.
-- Controlled bursts.
-- Partial availability during Redis outages.
+- Atomic shared counting.
+- Small implementation using established libraries.
+- API availability during Redis outages.
 
 ### Limitations
 
 - Additional infrastructure dependency.
 - Network overhead for Redis operations.
-- Global limits are not guaranteed during fallback.
+- No rate limiting during Redis store failures.
 - Redis failover may affect rate limit state consistency.
-- Local fallback and process restarts can grant additional budget.
+- Window boundaries and lost Redis counters can allow additional traffic.
 - Policy updates during traffic and production Redis HA are outside this case study.

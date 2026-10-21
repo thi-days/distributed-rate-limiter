@@ -1,44 +1,103 @@
+import { createHash } from 'node:crypto';
 import express, { type RequestHandler } from 'express';
-import type { Configuration } from '../config.js';
-import { createApiKeyMiddleware } from './api-key-middleware.js';
-import { createRateLimitMiddleware, type BucketStore } from './rate-limit-middleware.js';
+import { rateLimit, type Store } from 'express-rate-limit';
+import { policies, windowMs } from '../config.js';
 import { jsonErrorHandler } from './error-handler.js';
 
-export interface ApplicationDependencies {
-  /** Immutable registry used before any store access. */
-  readonly configuration: Pick<Configuration, 'policyFor'>;
-  /** Make exactly one consumption attempt for a registered, validated key. */
-  readonly bucketStore: BucketStore;
-  /** Safe public instance label, exposed as X-Instance-ID. */
+export interface ApplicationOptions {
+  /** Shared Redis store, or a substitute for isolated tests. */
+  readonly store: Store;
+  /** Public instance label shown in responses for the distribution experiment. */
   readonly instanceId: string;
-  /** Demonstration handler; injectable to verify allowance and error propagation. */
-  readonly resourceHandler?: RequestHandler;
+  /** Registered keys and maximum requests per window. */
+  readonly clients?: ReadonlyMap<string, number>;
 }
 
-/** Construct without listening, opening Redis, or installing process handlers. */
-export function createApplication(dependencies: ApplicationDependencies) {
-  if (!/^[A-Za-z0-9._-]{1,64}$/u.test(dependencies.instanceId)) throw new Error('Invalid instance ID');
+interface ClientContext {
+  /** Validated API key; values remain case-sensitive. */
+  apiKey: string;
+  /** Maximum requests in the current one-minute window. */
+  limit: number;
+}
+
+type ClientMiddleware = RequestHandler<
+  Record<string, string>,
+  unknown,
+  unknown,
+  Record<string, string>,
+  ClientContext
+>;
+
+/** Build the routes without opening connections or listening on a port. */
+export function createApplication({
+  store,
+  instanceId,
+  clients = policies,
+}: ApplicationOptions) {
+  if (!/^[A-Za-z0-9._-]{1,64}$/u.test(instanceId))
+    throw new Error('Invalid instance ID');
 
   const app = express();
   app.disable('x-powered-by');
-  app.use(function identifyInstance(_req, res, next) {
-    res.setHeader('X-Instance-ID', dependencies.instanceId);
+  app.use((_req, res, next) => {
+    res.setHeader('X-Instance-ID', instanceId);
     next();
   });
-  const healthHandler: RequestHandler = (_req, res) => { res.json({ message: 'ok' }); };
-  const resourceHandler: RequestHandler = (_req, res) => { res.json({ message: 'ok' }); };
+  app.get('/health', (_req, res) => {
+    res.json({ message: 'ok' });
+  });
 
-  app.get('/health', healthHandler);
+  const limiter = rateLimit({
+    windowMs,
+    store,
+    keyGenerator: (_req, res) =>
+      createHash('sha256')
+        .update((res.locals as ClientContext).apiKey)
+        .digest('hex'),
+    limit: (_req, res) => (res.locals as ClientContext).limit,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    passOnStoreError: true,
+    message: { error: { code: 'RATE_LIMIT_EXCEEDED' } },
+    // Store errors may contain credentials; log only the library's explanation.
+    logger: {
+      error: (_error, message) =>
+        console.error(message ?? 'Rate limiter error'),
+      warn: (_error, message) =>
+        console.warn(message ?? 'Rate limiter warning'),
+    },
+  });
 
-  const identifyClient = createApiKeyMiddleware(dependencies.configuration);
-  const rateLimit = createRateLimitMiddleware(dependencies.bucketStore);
+  const identifyClient: ClientMiddleware = (req, res, next) => {
+    let keyFields = 0;
+    for (let index = 0; index < req.rawHeaders.length; index += 2) {
+      if (req.rawHeaders[index]?.toLowerCase() === 'x-api-key') keyFields++;
+    }
 
-  app.get(
-    '/api/resource',
-    identifyClient,
-    rateLimit,
-    dependencies.resourceHandler ?? resourceHandler,
-  );
+    const apiKey = req.headers['x-api-key'];
+    if (
+      keyFields !== 1 ||
+      typeof apiKey !== 'string' ||
+      !/^[^\s]+$/u.test(apiKey)
+    ) {
+      res.status(400).json({ error: { code: 'INVALID_API_KEY' } });
+      return;
+    }
+
+    const limit = clients.get(apiKey);
+    if (limit === undefined) {
+      res.status(403).json({ error: { code: 'UNKNOWN_API_KEY' } });
+      return;
+    }
+
+    res.locals.apiKey = apiKey;
+    res.locals.limit = limit;
+    next();
+  };
+
+  app.get('/api/resource', identifyClient, limiter, (_req, res) => {
+    res.json({ message: 'ok' });
+  });
   app.use(jsonErrorHandler);
 
   return app;

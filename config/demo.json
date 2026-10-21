@@ -1,7 +1,0 @@
-{
-  "defaults": { "capacity": 100, "refillPerMinute": 100 },
-  "clients": [
-    { "apiKey": "demo-client" },
-    { "apiKey": "demo-client-custom", "capacity": 50, "refillPerMinute": 25 }
-  ]
-}

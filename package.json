@@ -5,22 +5,22 @@
   "license": "ISC",
   "author": "Thiago Dias",
   "type": "commonjs",
-  "main": "dist/index.js",
-  "directories": {
-    "doc": "docs",
-    "test": "tests"
-  },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/copy-lua.mjs dist",
+    "build": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\" && tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json",
     "test": "npm run test:unit",
     "test:unit": "npm run build && npm run test:compile && node --test \".test-dist/tests/unit/**/*.test.js\"",
-    "test:compile": "node -e \"require('node:fs').rmSync('.test-dist', { recursive: true, force: true })\" && tsc -p tsconfig.test.json && node scripts/copy-lua.mjs .test-dist/src",
-    "test:integration": "npm run test:compile && node --test .test-dist/tests/integration/*.test.js"
+    "test:compile": "node -e \"require('node:fs').rmSync('.test-dist', { recursive: true, force: true })\" && tsc -p tsconfig.test.json",
+    "test:integration": "npm run test:compile && node --test \".test-dist/tests/integration/*.test.js\"",
+    "start": "node dist/main.js",
+    "test:demo": "npm run test:compile && node --test \".test-dist/tests/demo/*.test.js\"",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test",
+    "check:demo": "npm run test:integration && npm run test:demo"
   },
   "private": true,
-  "types": "dist/index.d.ts",
   "engines": {
     "node": ">=24 <25"
   },
@@ -29,11 +29,14 @@
     "@types/express": "5.0.6",
     "@types/node": "^24.19.2",
     "eslint": "^10.13.0",
+    "prettier": "^3.9.10",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.72.0"
   },
   "dependencies": {
     "express": "5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "rate-limit-redis": "^6.0.1",
     "redis": "^6.3.0"
   }
 }

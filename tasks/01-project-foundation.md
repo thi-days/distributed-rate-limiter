@@ -4,14 +4,14 @@
 
 ## Description
 
-Create the smallest maintainable Node.js/TypeScript project foundation with strict typing, linting, unit tests, and a separate Redis integration test entry point. The current package only has a placeholder failing test command.
+Create the smallest maintainable Node.js/TypeScript project foundation with strict typing, linting, unit tests, and a separate Redis integration test entry point.
 
 ## Acceptance criteria
 
 - Document a supported Node.js version; add reproducible dependency installation and a lockfile.
-- Establish source/test layout, strict TypeScript compilation, build, lint, type-check, unit-test, and integration-test commands.
+- Establish source/test layout, strict TypeScript compilation, build, formatting, lint, type-check, unit-test, and integration-test commands.
 - Integration tests clearly require real Redis and fail with an actionable setup message when unavailable; ordinary unit tests need no infrastructure.
-- Add a minimal foundation check proving the test runner and build work; no limiter behavior is implemented here.
+- Check startup, process shutdown, and the development commands without introducing another test framework.
 - Explain dependency choices and avoid redundant frameworks or tooling.
 
 ## Dependencies

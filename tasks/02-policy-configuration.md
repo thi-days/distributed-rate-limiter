@@ -1,24 +1,23 @@
-# 02 — Load and validate per-key policies
+# 02 — Define demonstration policies
 
 **Status**: Implemented
 
 ## Description
 
-Load a small startup JSON configuration and resolve one effective policy per registered API Key. No configuration service or live update mechanism is needed.
+Keep the two demonstration clients in a typed table in `src/config.ts`, independent of Express. Avoid file loading and a configuration schema for this fixed example.
 
 ## Acceptance criteria
 
-- Read `RATE_LIMIT_CONFIG_PATH`. Required `defaults` contains `capacity` and `refillPerMinute`; `clients` is a nonempty list of objects with `apiKey` and optional overrides of those two fields.
-- Use defaults of 100/100 for the demonstration. Each override replaces only its supplied field; request cost stays 1.
-- Validate positive safe-integer policy values, distinct client keys matching the nonempty, whitespace-free token format in task 05, valid JSON/schema, and positive Redis timeout/probe settings. Fail startup clearly without logging keys or credentials.
-- Both stores receive the same effective policy. Unregistered keys are rejected before store access.
-- Policies remain fixed during each run. Tests with changed policies use isolated state.
+- `demo-client` allows 10 requests per one-minute window; `demo-client-custom` allows 10.
+- Keys are case-sensitive and identify clients without authenticating them.
+- Policies stay fixed during a run and are identical across instances.
+- Unknown keys return 403 before store access. Invalid keys return 400.
+- Use fresh Redis state when changing a policy for an experiment.
 
 ## Dependencies
 
-01.
+1.
 
 ## Expected tests
 
-- Defaults, independent overrides, two clients with different policies, and unknown-key lookup.
-- Unreadable/malformed configuration, invalid values/types, duplicate clients, and redacted startup errors.
+- HTTP policy selection, independent keys, and unknown/invalid keys without store access.
