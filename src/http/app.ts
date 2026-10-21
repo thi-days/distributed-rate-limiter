@@ -34,22 +34,28 @@ export function createApplication({
   instanceId,
   clients = policies,
 }: ApplicationOptions) {
+  // This public label is returned in headers, so accept only safe characters.
   if (!/^[A-Za-z0-9._-]{1,64}$/u.test(instanceId))
     throw new Error('Invalid instance ID');
 
+  // Identify the serving instance on every response for the distribution demo.
   const app = express();
   app.disable('x-powered-by');
   app.use((_req, res, next) => {
     res.setHeader('X-Instance-ID', instanceId);
     next();
   });
+
+  // Health stays reachable without a key, even while Redis is unavailable.
   app.get('/health', (_req, res) => {
     res.json({ message: 'ok' });
   });
 
+  // The libraries manage shared counting, window expiry, and response headers.
   const limiter = rateLimit({
     windowMs,
     store,
+    // All instances use the same key without storing the raw API key in Redis.
     keyGenerator: (_req, res) =>
       createHash('sha256')
         .update((res.locals as ClientContext).apiKey)
@@ -57,6 +63,7 @@ export function createApplication({
     limit: (_req, res) => (res.locals as ClientContext).limit,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
+    // Continue serving on store errors, temporarily giving up rate-limit protection.
     passOnStoreError: true,
     message: { error: { code: 'RATE_LIMIT_EXCEEDED' } },
     // Store errors may contain credentials; log only the library's explanation.
@@ -68,7 +75,9 @@ export function createApplication({
     },
   });
 
+  // Resolve the client and its policy before the limiter can access the store.
   const identifyClient: ClientMiddleware = (req, res, next) => {
+    // Raw headers alternate names and values and preserve duplicate fields.
     let keyFields = 0;
     for (let index = 0; index < req.rawHeaders.length; index += 2) {
       if (req.rawHeaders[index]?.toLowerCase() === 'x-api-key') keyFields++;
@@ -84,20 +93,25 @@ export function createApplication({
       return;
     }
 
+    // A well-formed key still needs to belong to a registered demo client.
     const limit = clients.get(apiKey);
     if (limit === undefined) {
       res.status(403).json({ error: { code: 'UNKNOWN_API_KEY' } });
       return;
     }
 
+    // Share only validated values with the following middleware for this request.
     res.locals.apiKey = apiKey;
     res.locals.limit = limit;
     next();
   };
 
+  // Request flow: identify the client, check its allowance, then serve the resource.
   app.get('/api/resource', identifyClient, limiter, (_req, res) => {
     res.json({ message: 'ok' });
   });
+
+  // Register last so route failures reach the JSON error handler.
   app.use(jsonErrorHandler);
 
   return app;

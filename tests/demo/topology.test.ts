@@ -14,6 +14,8 @@ test(
       socket: { reconnectStrategy: false, connectTimeout: 1000 },
     });
     admin.on('error', () => {});
+
+    // Reset only the two known demo counters, never the whole Redis database.
     const keys = ['demo-client', 'demo-client-custom'].map(
       key =>
         `rate-limiter:window:${createHash('sha256').update(key).digest('hex')}`,
@@ -28,6 +30,7 @@ test(
     await admin.connect();
     await admin.del(keys);
 
+    // Go through Nginx so the real load balancer participates in the check.
     const responses = await Promise.all(
       Array.from({ length: 15 }, async () => {
         const response = await fetch('http://127.0.0.1:8080/api/resource', {
@@ -39,6 +42,7 @@ test(
       }),
     );
 
+    // Print actual observations for live demos; assertions still decide pass or fail.
     const accepted = responses.filter(({ status }) => status === 200).length;
     const rejected = responses.filter(({ status }) => status === 429).length;
     const instanceIds = [
@@ -57,6 +61,8 @@ test(
       if (response.status === 429)
         assert.ok(Number(response.headers.get('retry-after')) > 0);
     }
+
+    // Bypassing Nginx must not grant another allowance on any backend.
     for (const port of [3001, 3002, 3003]) {
       const response = await fetch(`http://127.0.0.1:${port}/api/resource`, {
         headers: { 'X-API-Key': 'demo-client' },
@@ -66,6 +72,8 @@ test(
       t.diagnostic(`Direct API on port ${port}: HTTP ${response.status}`);
       assert.equal(response.status, 429);
     }
+
+    // A different registered client keeps its own untouched allowance.
     const independent = await fetch('http://127.0.0.1:8080/api/resource', {
       headers: { 'X-API-Key': 'demo-client-custom' },
       signal: AbortSignal.timeout(3000),
@@ -77,11 +85,13 @@ test(
   },
 );
 
+// Compare the proxy and direct paths with actual duplicate header fields.
 for (const port of [8080, 3001]) {
   test(
     `port ${port} rejects actual mixed-case duplicate key fields`,
     { timeout: 5000 },
     async () => {
+      // Raw Node headers avoid merging duplicate fields before they reach the server.
       const response = await new Promise<{ status: number; body: string }>(
         (resolve, reject) => {
           const req = request(
@@ -114,6 +124,7 @@ for (const port of [8080, 3001]) {
         },
       );
 
+      // Both paths must preserve the API's invalid-key response.
       assert.equal(response.status, 400);
       assert.deepEqual(JSON.parse(response.body), {
         error: { code: 'INVALID_API_KEY' },

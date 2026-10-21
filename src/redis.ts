@@ -12,6 +12,7 @@ export function createRedisStore(
     commandOptions: { timeout: 100 },
     socket: { connectTimeout: 1_000, reconnectStrategy: () => 1_000 },
   });
+
   client.on('error', () => {
     console.error('Redis unavailable; rate limiting may be bypassed');
   });
@@ -20,6 +21,7 @@ export function createRedisStore(
     prefix,
     sendCommand: (...args: string[]) => client.sendCommand(args),
   });
+
   client.on('ready', () => {
     // Initialization may have failed while Redis was offline. Reload on recovery.
     store.incrementScriptSha = store.loadIncrementScript();

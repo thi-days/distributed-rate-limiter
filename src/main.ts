@@ -21,38 +21,45 @@ export function closeHttpServer(
 }
 
 function main(): void {
+  // Reject invalid startup settings before opening any connections.
   const port = process.env.PORT === undefined ? 3000 : Number(process.env.PORT);
   if (!Number.isInteger(port) || port < 0 || port > 65535)
     throw new Error('Invalid port');
 
+  // Reuse one Redis client and store for the lifetime of this API instance.
   const { client, store } = createRedisStore();
 
-  // Build the routes and start the conventional Express listener.
+  // Construct the HTTP routes; listening and Redis connection happen below.
   const app = createApplication({
     store,
     instanceId: process.env.INSTANCE_ID ?? 'api-1',
   });
-  // Listen even during an outage; node-redis reconnects in the background.
+
+  // Do not wait for Redis: the client reconnects in the background during outages.
   void client.connect().catch(() => {
     console.error('Unable to connect to Redis');
   });
+
+  // Keep the server handle so shutdown can finish or close active requests.
   const server = app.listen(port, () => {
     const address = server.address();
     if (address && typeof address !== 'string')
       console.log(`HTTP server listening on port ${address.port}`);
   });
 
-  // Finish active HTTP requests before closing Redis.
+  // Repeated signals must share one shutdown sequence.
   let shuttingDown = false;
 
   async function shutdown(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
 
+    // Leave Redis usable until active requests finish or the drain deadline expires.
     await closeHttpServer(server);
     if (client.isOpen) client.destroy();
   }
 
+  // Both common termination signals use the same cleanup path.
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 
@@ -66,6 +73,7 @@ function main(): void {
   });
 }
 
+// Importing this module for tests does not start the service.
 if (require.main === module) {
   try {
     main();

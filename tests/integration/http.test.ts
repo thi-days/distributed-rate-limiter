@@ -10,6 +10,7 @@ import { get, serve } from '../helpers/http.js';
 
 const redisUrl = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
 
+// Fail early with setup instructions if real Redis is not available.
 before(async () => {
   const client = createClient({
     url: redisUrl,
@@ -32,6 +33,7 @@ test(
   'three instances share one allowance and keep other keys independent',
   { timeout: 10_000 },
   async t => {
+    // Each run owns its counters, so previous runs and the demo cannot affect it.
     const prefix = `test:${randomUUID()}:`;
     const clients = new Map([
       ['demo-client', 10],
@@ -40,6 +42,8 @@ test(
     const connections = Array.from({ length: 3 }, () =>
       createRedisStore(redisUrl, prefix),
     );
+
+    // Remove only this run's keys and close clients even if an assertion fails.
     for (const { client } of connections)
       t.after(async () => {
         try {
@@ -63,6 +67,7 @@ test(
       ),
     );
 
+    // Spread concurrent requests directly across three independent HTTP servers.
     const responses = await Promise.all(
       Array.from({ length: 15 }, (_, index) => get(servers[index % 3]!)),
     );
@@ -77,6 +82,7 @@ test(
       `Shared limit: 10 | Sent: ${responses.length} | Accepted: ${accepted} | Rejected: ${rejected}`,
     );
 
+    // Separate per-instance counters would accept all fifteen requests instead.
     assert.equal(accepted, 10);
     assert.equal(rejected, 5);
     assert.equal(instanceIds.length, 3);
@@ -85,6 +91,8 @@ test(
       if (response.status === 429)
         assert.ok(Number(response.headers['retry-after']) > 0);
     }
+
+    // The second client must still work after the first client exhausts its limit.
     assert.equal(
       (await get(servers[0]!, '/api/resource', ['X-API-Key', 'custom'])).status,
       200,
@@ -95,6 +103,7 @@ test(
 /** A local TCP forwarder lets each failure test interrupt only its own Redis connection. */
 async function redisProxy(t: TestContext, initiallyOnline: boolean) {
   const target = new URL(redisUrl);
+  // Save the real destination before pointing the returned URL at this forwarder.
   const upstreamAddress = {
     host: target.hostname,
     port: Number(target.port || 6379),
@@ -107,6 +116,7 @@ async function redisProxy(t: TestContext, initiallyOnline: boolean) {
       return;
     }
     const upstream = createConnection(upstreamAddress);
+    // Close both halves together so the Redis client notices a lost connection.
     for (const socket of [incoming, upstream]) {
       sockets.add(socket);
       socket.on('error', () => {
@@ -121,6 +131,7 @@ async function redisProxy(t: TestContext, initiallyOnline: boolean) {
     }
     incoming.pipe(upstream).pipe(incoming);
   });
+  // Tear down sockets even if the scenario fails while Redis is unreachable.
   t.after(async () => {
     for (const socket of sockets) socket.destroy();
     await new Promise<void>(resolve => proxy.close(() => resolve()));
@@ -134,6 +145,7 @@ async function redisProxy(t: TestContext, initiallyOnline: boolean) {
 
   return {
     url: target.toString(),
+    // Interrupt only this test's connections; the shared Redis server stays running.
     setOnline(value: boolean) {
       online = value;
       if (!online) for (const socket of sockets) socket.destroy();
@@ -146,6 +158,7 @@ for (const initiallyOnline of [false, true]) {
     `${initiallyOnline ? 'runtime' : 'startup'} outage allows requests and recovery restores enforcement`,
     { timeout: 10_000 },
     async t => {
+      // Connection failures are expected; keep the report focused on response behavior.
       t.mock.method(console, 'error', () => {});
       const proxy = await redisProxy(t, initiallyOnline);
       const prefix = `test:${randomUUID()}:`;
@@ -153,6 +166,8 @@ for (const initiallyOnline of [false, true]) {
       t.after(() => {
         if (client.isOpen) client.destroy();
       });
+
+      // One allowed request is enough to exhaust this scenario's counter.
       const server = await serve(
         t,
         createApplication({
@@ -165,6 +180,7 @@ for (const initiallyOnline of [false, true]) {
       // Register rejection handling immediately, including cleanup after a failed assertion.
       void connecting.catch(() => {});
 
+      // For a runtime outage, exhaust the shared allowance before cutting the connection.
       if (initiallyOnline) {
         await connecting;
         assert.equal((await get(server)).status, 200);
@@ -176,6 +192,7 @@ for (const initiallyOnline of [false, true]) {
         await disconnected;
       }
 
+      // While offline, even an exhausted client is served without a limit decision.
       const responses = await Promise.all([
         get(server),
         get(server),
@@ -195,18 +212,23 @@ for (const initiallyOnline of [false, true]) {
       );
       assert.equal((await get(server, '/health', [])).status, 200);
 
+      // Subscribe before restoring connectivity so a fast recovery cannot be missed.
       const recovered = new Promise<void>(resolve => {
         client.once('ready', resolve);
       });
       proxy.setOnline(true);
       await recovered;
       await Promise.all([store.incrementScriptSha, store.getScriptSha]);
+
+      // Startup creates a fresh counter; runtime recovery keeps the exhausted one.
       if (!initiallyOnline) assert.equal((await get(server)).status, 200);
       const afterRecovery = await get(server);
       t.diagnostic(
         `Redis recovered: exhausted shared limit returns HTTP ${afterRecovery.status}`,
       );
       assert.equal(afterRecovery.status, 429);
+
+      // Remove this scenario's counter without affecting the running demo.
       await client.del(
         prefix + createHash('sha256').update('demo-client').digest('hex'),
       );
